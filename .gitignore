@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+.env.*
+
+# PaddleOCR downloaded models and logs
+.paddleocr/
+inference/
+*.log
+
+# Sample documents (contain personal data - never commit these)
+samples/
+*.pdf
+*.jpg
+*.jpeg
+*.png
+
+# IDE / OS
+.vscode/
+.idea/
+.cursor/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,9 @@
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pymupdf>=1.24
+paddlepaddle>=2.6,<3.0
+paddleocr>=2.7,<3.0
+opencv-python>=4.8
+numpy>=1.24,<2.0
+pillow>=10.0
