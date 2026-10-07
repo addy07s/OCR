@@ -5,10 +5,10 @@ A small web service that reads an Aadhaar or PAN document and returns the detail
 ## How the OCR works
 
 1. **Receive:** the client sends a JSON request with the document as a Base64 string and a document type (`AADHAAR` or `PAN`).
-2. **Convert:** the Base64 text is decoded in memory (nothing is saved to disk). A PDF is rendered to an image with PyMuPDF (first page only). An image file is loaded with OpenCV or Pillow.
+2. **Convert:** the Base64 text is decoded in memory (nothing is saved to disk). A PDF is rendered to an image with PyMuPDF (first page only). An image file is loaded with OpenCV.
 3. **Read:** PaddleOCR (English, with text-angle correction) finds the text in the image. Text it is not confident about is dropped.
 4. **Extract:** regular expressions pick the fields out of the text.
-   - **Aadhaar:** name, date of birth, gender and ID number. The ID number is never returned. It is always replaced with `[Aadhaar Redacted]`.
+   - **Aadhaar:** name, date of birth, gender and the 12-digit Aadhaar number.
    - **PAN:** PAN number (5 letters, 4 digits, 1 letter), name, father's name and date of birth.
 5. **Respond:** the fields come back as JSON. A field that could not be found is `null`.
 

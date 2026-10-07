@@ -1,41 +1,30 @@
-"""API gateway: receives Base64 documents from Salesforce and returns parsed fields."""
+"""API gateway: accepts a Base64 document and returns the extracted fields."""
 
 import logging
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, Literal
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 import engine
 import parser
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("ocr-api")
+MAX_BASE64_CHARS: int = 8_000_000  # about 6 MB of file data
 
-
-MAX_BASE64_CHARS: int = 8_000_000  # ~6 MB of decoded file data
+logger = logging.getLogger(__name__)
 
 
 class OcrPayload(BaseModel):
-    """Request body sent by Salesforce (exactly one document per request)."""
-
-    document_base64: str = Field(..., min_length=1, max_length=MAX_BASE64_CHARS)
+    document_base64: str = Field(min_length=1, max_length=MAX_BASE64_CHARS)
     document_type: Literal["AADHAAR", "PAN"]
-
-    @field_validator("document_type", mode="before")
-    @classmethod
-    def normalise_document_type(cls, value: Any) -> Any:
-        """Accept 'pan', ' Aadhaar ' etc. by upper-casing and trimming."""
-        return value.strip().upper() if isinstance(value, str) else value
 
 
 class OcrResponse(BaseModel):
-    """Response body returned to Salesforce."""
-
     success: bool
-    data: Dict[str, Any]
+    data: dict[str, Optional[str]]
     execution_time: float
 
 
@@ -46,32 +35,27 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="OCR Microservice", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="OCR Microservice", lifespan=lifespan)
 
 
 @app.get("/health")
-def health() -> Dict[str, str]:
-    """Liveness probe for load balancers."""
+def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Plain `def` (not `async def`) so FastAPI runs this CPU-heavy work in a worker
-# thread instead of blocking the event loop.
-@app.post("/api/ocr", response_model=OcrResponse)
-def ocr_endpoint(payload: OcrPayload) -> OcrResponse:
-    """Run OCR on a Base64 document and return the structured fields."""
+# A plain `def` makes FastAPI run this CPU-heavy work in a worker thread,
+# so it does not block the event loop.
+@app.post("/api/ocr")
+def ocr(payload: OcrPayload) -> OcrResponse:
     start = time.perf_counter()
     try:
-        raw_text = engine.run_ocr(payload.document_base64)
-        data = parser.parse_document_data(raw_text, payload.document_type)
-    except (engine.DocumentDecodeError, ValueError) as exc:
+        text_lines = engine.run_ocr(payload.document_base64)
+        data = parser.parse_document_data(text_lines, payload.document_type)
+    except engine.DocumentDecodeError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except engine.OcrProcessingError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
     except Exception as exc:
-        # Never leak internals (or document contents) to the caller.
-        logger.exception("Unexpected failure while processing document")
-        raise HTTPException(status_code=500, detail="Internal server error.") from exc
+        logger.exception("OCR processing failed")
+        raise HTTPException(status_code=500, detail="OCR processing failed.") from exc
 
     return OcrResponse(
         success=True,
